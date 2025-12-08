@@ -1,23 +1,166 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState,useEffect,useRef} from "react";
+import { useNavigate,useLocation} from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
-
+import * as poseDetection from "@tensorflow-models/pose-detection";
+import * as tf from '@tensorflow/tfjs-core';
+// Register WebGL backend
+import '@tensorflow/tfjs-backend-webgl';
+// state for feedback messages;
 const InterviewRoom = () => {
+  const location=useLocation();
+  const initialMinutes=location.state?.selectedMinute||45;
   const navigate = useNavigate();
   const [notes, setNotes] = useState("");
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [timeElapsed, setTimeElapsed] = useState("00:00");
+  const [isMuted, setIsMuted] = useState(true);
+  const [isVideoOff, setIsVideoOff] = useState(true);
+  const videoRef=useRef(null);
+  const [secondsRemaining,setSecondsRemaining] = useState(initialMinutes*60);
 
+  const feedbackRef=useRef({
+  "shoulder_level":0,
+  "lookLeftCount":0,
+  "lookRightCount":0,
+  "sitStraight":0,
+  "totalFrames":0
+});
+const detectorRef=useRef(null);
+const loopRef=useRef(null);
   const handleEndInterview = () => {
-    navigate("/profile");
+    if(loopRef.current) clearInterval(loopRef.current);
+    navigate("/profile",{state:{
+          "feedback":feedbackRef.current,
+        }
+      })
   };
+  useEffect(()=>{
+    const loadModel=async()=>{
+    await tf.ready();
+    const detectorconfig={
+      "modelType":poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+    };
+    const detector=await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet,detectorconfig);
+    detectorRef.current=detector;
+    console.log("AI model is loaded");
+    startAnalysisLoop();
+  }
+  const startAnalysisLoop=()=>{
+    loopRef.current=setInterval( async ()=>{
+      if(videoRef.current&&videoRef.current.readyState===4&&detectorRef.current){
+        const poses=await detectorRef.current.estimatePoses(videoRef.current);
+        if(poses.length>0&&poses[0].score>0.5){
+          analysePosture(poses[0].keypoints);
+        }
+      }
+    },100)
+  }
+  loadModel();
+  return ()=>{
+    if(loopRef.current) clearInterval(loopRef.current);
+  }
+  },[]);
+  useEffect(()=>{
+    let currentStream=null;
+    const startCamera= async ()=>{
+      try{
+        // Ask for user's permission.
+        const stream=await navigator.mediaDevices.getUserMedia({
+          video:true,
+          audio:true
+        });
+        currentStream=stream;
+        // if user allowed update isVideoOff variable.
+        setIsVideoOff(false);
+        setIsMuted(false);
+        // Waiting for React to render the video component and connecting the stream to it.
+        setTimeout(()=>{
+          if(videoRef.current){
+            videoRef.current.srcObject=stream;
+          }
+        },100)
+      }catch(err){
+        console.log("user dennied the permission");
+        setIsVideoOff(true);
+        setIsMuted(true)
+      }
+    }
+    startCamera();
+    // cleanup function
+    // when the page unmounts the cleanup function will be automatically called and it turnoff the camera.
+    return ()=>{
+      if(currentStream){
+        // turnoff the camera amd microphone.
+        currentStream.getTracks().forEach(track=>track.stop());
+      }
+    }
+  },[])
+  useEffect(()=>{
+    const setTimer=setInterval(()=>{
+      setSecondsRemaining((prev)=>{
+        if(prev<=1){
+          clearInterval(setTimer);
+          if(loopRef.current) clearInterval(loopRef.current);
+           navigate("/profile",{state:{
+          "feedback":feedbackRef.current,
+        }
+      })
+          return 0;
+        }
+        return prev-1;
+      })
+    },1000)
+    return ()=>{
+      clearInterval(setTimer);
+    }
+  },[]);
+  const formatTimer=(totalSeconds)=>{
+    const min=Math.floor(totalSeconds/60);
+    const sec=totalSeconds%60;
+    return `${min<10?"0"+min:min}:${sec<10?"0"+sec:sec}`;
+  }
+  const timeElapsed=formatTimer(secondsRemaining);
+  const analysePosture=(keypoints)=>{
+    const nose=keypoints[0];
+    const leftShoulder=keypoints[5];
+    const rightShoulder=keypoints[6];
+    const videoWidth=videoRef.current.videoWidth;
+    if(videoWidth){
+          feedbackRef.current.totalFrames++;
+    // if(nose.x<200){
+    //   feedbackRef.current.lookLeftCount++;
+    // }
+    // else if(nose.x>440){
+    //   feedbackRef.current.lookRightCount++;
+    // }
+    const normalizedNoseX=nose.x/videoWidth;
+    if(normalizedNoseX<0.30){
+      feedbackRef.current.lookLeftCount++;
+    }
+    if(normalizedNoseX>0.70){
+      feedbackRef.current.lookRightCount++;
+    }
+    const shoulderSlope=Math.abs(leftShoulder.y-rightShoulder.y);
+    if(shoulderSlope>20){
+      feedbackRef.current.shoulder_level++;
+    }
+    // const mid_shoulder=Math.abs(leftShoulder.x+rightShoulder.x)/2;
+    // const nose_gap=Math.abs(nose.x-mid_shoulder);
+    // if(nose_gap>20) feedbackRef.current.sitStraight++;
+    if(normalizedNoseX<0.40||normalizedNoseX>0.60||shoulderSlope>20){
+      feedbackRef.current.sitStraight++;
+    }
+    // const shoulderMidpointX = (leftShoulder.x + rightShoulder.x) / 2;
+    // const normalizedBodyX = shoulderMidpointX / videoWidth;
+    // if (normalizedBodyX < 0.40 || normalizedBodyX > 0.60) {
+    //     feedbackRef.current.sitStraight++; 
+    // }
 
+    }
+  }
   return (
     <div className="h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-4">
@@ -85,12 +228,13 @@ const InterviewRoom = () => {
                       </p>
                     </div>
                   ) : (
-                    <Avatar className="h-24 w-24 border-4 border-primary">
-                      {/* <AvatarImage src="/placeholder.svg" /> */}
-                      <AvatarFallback className="bg-primary text-primary-foreground text-3xl">
-                        HO
-                      </AvatarFallback>
-                    </Avatar>
+                     <video 
+                    ref={videoRef}      // connecting the html to typescript
+                    autoPlay            // required to play without pressing a hit button
+                    muted               // required to prevent echo
+                    playsInline         // required for mobile
+                    className="w-full h-full object-cover rounded-lg transform scale-x-[-1]" // scale-x-[-1] mirrors the video like a selfie cam
+                    />
                   )}
                   <div className="absolute bottom-4 left-4">
                     <Badge className="bg-accent text-accent-foreground">
@@ -100,34 +244,6 @@ const InterviewRoom = () => {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Controls */}
-            {/* <div className="flex justify-center gap-3 pt-2">
-              <Button
-                size="lg"
-                variant={isMuted ? "destructive" : "secondary"}
-                onClick={() => setIsMuted(!isMuted)}
-                className="rounded-full h-14 w-14"
-              >
-                {isMuted ? (
-                  <MicOff className="h-5 w-5" />
-                ) : (
-                  <Mic className="h-5 w-5" />
-                )}
-              </Button>
-              <Button
-                size="lg"
-                variant={isVideoOff ? "destructive" : "secondary"}
-                onClick={() => setIsVideoOff(!isVideoOff)}
-                className="rounded-full h-14 w-14"
-              >
-                {isVideoOff ? (
-                  <VideoOff className="h-5 w-5" />
-                ) : (
-                  <Video className="h-5 w-5" />
-                )}
-              </Button>
-            </div> */}
           </div>
 
           {/* Notes Section - Full Height */}

@@ -23,7 +23,7 @@ const InterviewDetail = () => {
 
   const handleStart = () => {
     if (duration && interviewer) {
-      navigate(`/interview/${id}/room`);
+ navigate(`/interview/${id}/room`,{state:{selectedMinute:duration}});
     }
   };
 
@@ -57,6 +57,7 @@ const InterviewDetail = () => {
                   <SelectValue placeholder="Select duration" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="1">1 minutes</SelectItem>
                   <SelectItem value="15">15 minutes</SelectItem>
                   <SelectItem value="30">30 minutes</SelectItem>
                   <SelectItem value="45">45 minutes</SelectItem>

@@ -1,18 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {useLocation} from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, TrendingUp, Award, ArrowRight } from "lucide-react";
-
+let currentInterviewFeedback="";
+let currentscore=0;
 const interviewHistory = [
-  {
-    id: 1,
-    title: "Frontend Developer Interview",
-    date: "24-Dec-2024",
-    score: 85,
-    feedback: "Great technical knowledge! Focus on explaining your thought process more clearly. Practice articulating trade-offs between different solutions. Your React expertise shines, but work on system design concepts.",
-    category: "Technical"
-  },
   {
     id: 2,
     title: "Behavioral Interview Practice",
@@ -56,8 +50,30 @@ const interviewHistory = [
 ];
 
 const Profile = () => {
+const location=useLocation();
+const data=location.state.feedback||{totalFrames:0};
+if(data.totalFrames){
+  const slouchPercent=Math.round((data.shoulder_level/data.totalFrames)*100);
+  const lookAwayPercent = Math.round(((data.lookLeftCount + data.lookRightCount) / data.totalFrames) * 100);
+  const sitStraightPercent=Math.round((data.sitStraight/data.totalFrames)*100);
+  console.log("Analysis",{slouchPercent,lookAwayPercent,sitStraightPercent});
+    if (slouchPercent > 10) currentInterviewFeedback+="Your shoulders were often uneven or tilted. This visual cue often signals low energy, fatigue, or casualness to an interviewer.Sit with your back against the chair and imagine a string pulling the top of your head toward the ceiling. Good posture signals engagement and readiness.\n";
+    if (lookAwayPercent > 10) currentInterviewFeedback+="We noticed you frequently looked away from the camera. In a remote interview, looking at the camera is equivalent to making eye contact. Looking sideways can be interpreted as reading notes, being distracted, or lacking confidence.Try to position your Zoom/Teams window directly under your webcam so you are looking at the interviewer while looking at the camera.\n";
+    if(sitStraightPercent>10) currentInterviewFeedback+="You were frequently positioned to the side of the video frame. This can make the interview feel unbalanced and may result in parts of your body language being cut off.Adjust your chair so your nose is aligned with the center of your webcam. You should be the focal point of the screen.\n";
+    if (currentInterviewFeedback ==="") currentInterviewFeedback+="Excellent posture! You maintained good eye contact.";
+    currentscore=Math.max(0,100-(slouchPercent+lookAwayPercent+sitStraightPercent));
+}
+const displayList=[
+  {id:1,
+    title:"Software Developer Interview",
+    date:new Date().toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}),
+    score:currentscore||0,
+    feedback:currentInterviewFeedback||"No data available",
+    category:"Technical"
+  }, ...interviewHistory
+]
   const averageScore = Math.round(
-    interviewHistory.reduce((sum, interview) => sum + interview.score, 0) / interviewHistory.length
+    displayList.reduce((sum, interview) => sum + interview.score, 0) / displayList.length
   );
 
   return (
@@ -81,7 +97,7 @@ const Profile = () => {
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="secondary" className="bg-accent/10 text-accent border-accent/20">
                     <Award className="h-3 w-3 mr-1" />
-                    {interviewHistory.length} Interviews Completed
+                    {displayList.length} Interviews Completed
                   </Badge>
                   <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
                     <TrendingUp className="h-3 w-3 mr-1" />
@@ -103,7 +119,7 @@ const Profile = () => {
           </div>
 
           <div className="grid gap-4">
-            {interviewHistory.map((interview) => (
+            {displayList.map((interview) => (
               <Card 
                 key={interview.id} 
                 className="border-border bg-card hover:border-accent hover:shadow-lg transition-all cursor-pointer group"
@@ -157,3 +173,27 @@ const Profile = () => {
 };
 
 export default Profile;
+// import {useLocation} from "react-router-dom";
+// const Profile=()=>{
+// let feedbackList = [];
+// const location=useLocation();
+// const data=location.state.feedback;
+// if(data.totalFrames){
+//   const slouchPercent=Math.round((data.shoulder_level/data.totalFrames)*100);
+//   const lookAwayPercent = Math.round(((data.lookLeftCount + data.lookRightCount) / data.totalFrames) * 100);
+//   const sitStraightPercent=Math.round((data.sitStraight/data.totalFrames)*100);
+//     if (slouchPercent > 20) feedbackList.push("Your shoulders were often uneven or tilted. This visual cue often signals low energy, fatigue, or casualness to an interviewer.Sit with your back against the chair and imagine a string pulling the top of your head toward the ceiling. Good posture signals engagement and readiness.");
+//     if (lookAwayPercent > 10) feedbackList.push("We noticed you frequently looked away from the camera. In a remote interview, looking at the camera is equivalent to making eye contact. Looking sideways can be interpreted as reading notes, being distracted, or lacking confidence.Try to position your Zoom/Teams window directly under your webcam so you are looking at the interviewer while looking at the camera.");
+//     if(sitStraightPercent>20) feedbackList.push("You were frequently positioned to the side of the video frame. This can make the interview feel unbalanced and may result in parts of your body language being cut off.Adjust your chair so your nose is aligned with the center of your webcam. You should be the focal point of the screen");
+//     if (feedbackList.length === 0) feedbackList.push("Excellent posture! You maintained good eye contact.");
+// }
+// return <div className="bg-gray-50 p-4 rounded-lg">
+//             <h3 className="font-semibold mb-2">Analysis:</h3>
+//             <ul className="list-disc pl-5 space-y-2">
+//               {feedbackList?.map((item, index) => (
+//                 <li key={index} className="text-gray-700">{item}</li>
+//               ))}
+//             </ul>
+//           </div>
+// }
+// export default Profile;
