@@ -87,4 +87,7 @@ For a complete list, please refer to the `package.json` file.
 
 ## Contributors
 
-This project is currently maintained by the initial contributors. We welcome contributions from the community!
+- **1** : Vaibhav Agrawal : https://github.com/competitive-programmer04
+- **2** : Sintu Hazarika : https://github.com/Sintuhazarika555
+- **3** : Aman Kumar : https://github.com/amankumar06924
+- **4** : Aman Sonwani : https://github.com/CyberMatic-AmAn 
