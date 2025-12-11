@@ -17,6 +17,7 @@ import {
 const menuItems = [
   { title: "Home", url: "/", icon: Home },
   { title: "Chatbot", url: "/chatbot", icon: MessageSquare },
+  { title: "Profile", url: "/profile", icon: User },
   { title: "Interview", url: "/interview", icon: Video },
 ];
 
