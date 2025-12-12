@@ -15,7 +15,7 @@ import { Bot, User } from "lucide-react";
 
 // OpenRouter SDK initialization
 const openrouter = new OpenRouter({
-  apiKey: import.meta.env.VITE_OPENROUTER_API_KEY,
+  apiKey: import.meta.env.VITE_GEMINI_API_KEY,
 });
 
 interface Message {
@@ -29,6 +29,7 @@ const InterviewRoom = () => {
   const navigate = useNavigate();
 
   // States
+  let streamRef=useRef(null);
   const [notes, setNotes] = useState("");
   const [isMuted, setIsMuted] = useState(true);
   const [cnt_IsVideoOff, set_cntIsVideoOff] = useState(1);
@@ -115,12 +116,12 @@ const InterviewRoom = () => {
 
   // Video handling
   useEffect(() => {
-    let currentStream: MediaStream | null = null;
+   //streamRef.current: MediaStream | null = null;
     const startCamera = async () => {
       if (cnt_IsVideoOff % 2 !== 0) {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          currentStream = stream;
+         streamRef.current = stream;
           setIsVideoOff(false);
           setTimeout(() => {
             if (videoRef.current) videoRef.current.srcObject = stream;
@@ -130,15 +131,18 @@ const InterviewRoom = () => {
           setIsVideoOff(true);
         }
       } else {
-        if (currentStream) {
-          currentStream.getVideoTracks().forEach((track) => track.stop());
+        if (streamRef.current) {
+         streamRef.current.getVideoTracks().forEach((track) => track.stop());
           setIsVideoOff(true);
         }
       }
     };
     startCamera();
     return () => {
-      if (currentStream) currentStream.getTracks().forEach((track) => track.stop());
+      if (streamRef.current){
+        speechRecognition.stopListening();
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
   }, [cnt_IsVideoOff]);
 
@@ -184,7 +188,7 @@ const askAI = async (messages: Message[]) => {
 
   try {
     const stream = await openrouter.chat.send({
-      model: "x-ai/grok-4.1-fast",
+      model: "gemini-2.5-pro",
       messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -245,18 +249,30 @@ const askAI = async (messages: Message[]) => {
 
   // Toggle mic
   const toggleMic = async () => {
+    let mic_stream=null;
     if (isMuted) {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        setIsMuted(false);
-        speechRecognition.startListening({ continuous: true, language: "en-US" });
-      } catch (err) {
-        console.log("User denied microphone permission");
+      try{
+        mic_stream=await navigator.mediaDevices.getUserMedia({
+          audio:true
+        });
+        const newAudioTrack=mic_stream.getAudioTracks()[0];
+        if(streamRef.current){
+          streamRef.current.addTrack(newAudioTrack);
+        }
+        setIsMuted(!isMuted);
+        speechRecognition.startListening({continuous:true,language:"en-US"});
+      }catch(err){
+        console.log("user denied the permission of microphone");
         setIsMuted(true);
       }
-    } else {
-      setIsMuted(true);
+    }
+    else{
+      setIsMuted(!isMuted);
       speechRecognition.stopListening();
+      if(streamRef.current){
+        const audioTrack=streamRef.current.getAudioTracks();
+        audioTrack.forEach((track)=>{track.stop();streamRef.current.removeTrack(track)});
+      }
       if (transcript) {
         console.log("User said:", transcript);
         await handleUserInput(transcript);
